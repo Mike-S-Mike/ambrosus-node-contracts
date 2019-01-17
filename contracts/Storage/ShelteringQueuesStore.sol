@@ -25,7 +25,6 @@ contract ShelteringQueuesStore is Base {
 
     struct ShelteringQueue {
         address headSheltererId;
-        address tailSheltererId;
         uint size;
         mapping(address => ShelteringQueueItem) queueStorage;
     }
@@ -33,39 +32,33 @@ contract ShelteringQueuesStore is Base {
     mapping(bytes32 => ShelteringQueue) sheltererQueuesByType;
 
     constructor(Head _head) public Base(_head) {
-        sheltererQueuesByType[keccak256(abi.encodePacked(Consts.SecondaryNodeType.OMEGA))] = ShelteringQueue(0,0,0);
-        sheltererQueuesByType[keccak256(abi.encodePacked(Consts.SecondaryNodeType.SIGMA))] = ShelteringQueue(0,0,0);
-        sheltererQueuesByType[keccak256(abi.encodePacked(Consts.SecondaryNodeType.ZETA))] = ShelteringQueue(0,0,0);
+        sheltererQueuesByType[keccak256(abi.encodePacked(Consts.SecondaryNodeType.OMEGA))] = ShelteringQueue(0,0);
+        sheltererQueuesByType[keccak256(abi.encodePacked(Consts.SecondaryNodeType.SIGMA))] = ShelteringQueue(0,0);
+        sheltererQueuesByType[keccak256(abi.encodePacked(Consts.SecondaryNodeType.ZETA))] = ShelteringQueue(0,0);
     }
 
     function rotateRound(Consts.SecondaryNodeType nodeType) public onlyContextInternalCalls returns (address) {
         require(!isQueueEmpty(nodeType), "Queue must not be empty");
         bytes32 queueId = keccak256(abi.encodePacked(nodeType));
-
         address head = sheltererQueuesByType[queueId].headSheltererId;
-        removeShelterer(head, nodeType);
-        addShelterer(head, nodeType);
+        sheltererQueuesByType[queueId].headSheltererId = sheltererQueuesByType[queueId].queueStorage[head].next;
         return head;
     }
 
     function addShelterer(address sheltererId, Consts.SecondaryNodeType nodeType) public onlyContextInternalCalls {
         require(!isInQueue(sheltererId, nodeType), "Shelterer must not be in queue");
-
         bytes32 queueId = keccak256(abi.encodePacked(nodeType));
         uint size = sheltererQueuesByType[queueId].size;
         if (size == 0) {
             sheltererQueuesByType[queueId].headSheltererId = sheltererId;
-            sheltererQueuesByType[queueId].tailSheltererId = sheltererId;
-            sheltererQueuesByType[queueId].queueStorage[sheltererId].initialized = true;
-            sheltererQueuesByType[queueId].size = 1;
-            return;
+            sheltererQueuesByType[queueId].queueStorage[sheltererId].prev = sheltererId;
         }
+        address head = sheltererQueuesByType[queueId].headSheltererId;
+        address tail = sheltererQueuesByType[queueId].queueStorage[head].prev;
 
-        address tail = sheltererQueuesByType[queueId].tailSheltererId;
+        sheltererQueuesByType[queueId].queueStorage[head].prev = sheltererId;
         sheltererQueuesByType[queueId].queueStorage[tail].next = sheltererId;
-        sheltererQueuesByType[queueId].queueStorage[sheltererId].initialized = true;
-        sheltererQueuesByType[queueId].queueStorage[sheltererId].prev = tail;
-        sheltererQueuesByType[queueId].tailSheltererId = sheltererId;
+        sheltererQueuesByType[queueId].queueStorage[sheltererId] = ShelteringQueueItem(head, tail, true);
         sheltererQueuesByType[queueId].size = size.add(1);
     }
 
@@ -82,11 +75,8 @@ contract ShelteringQueuesStore is Base {
             sheltererQueuesByType[queueId].queueStorage[next].prev = prev;
         }
 
-        if(sheltererId == sheltererQueuesByType[queueId].headSheltererId) {
+        if (sheltererId == sheltererQueuesByType[queueId].headSheltererId) {
             sheltererQueuesByType[queueId].headSheltererId = next;
-        }
-        if(sheltererId == sheltererQueuesByType[queueId].tailSheltererId) {
-            sheltererQueuesByType[queueId].tailSheltererId = prev;
         }
         delete sheltererQueuesByType[queueId].queueStorage[sheltererId];
         sheltererQueuesByType[queueId].size = sheltererQueuesByType[queueId].size.sub(1);
@@ -107,3 +97,4 @@ contract ShelteringQueuesStore is Base {
         return sheltererQueuesByType[queueId].size == 0;
     }
 }
+
