@@ -44,6 +44,10 @@ contract AtlasStakeStore is Base {
         return stakes[node].initialAmount > 0;
     }
 
+    function canStore(address node) public view returns (bool) {
+        return stakes[node].nodeType != Consts.SecondaryNodeType.NONE;
+    }
+
     function getNumberOfStakers() public view returns (uint32) {
         return numberOfStakers;
     }
@@ -117,6 +121,7 @@ contract AtlasStakeStore is Base {
     }
 
     function incrementStorageUsed(address node) public onlyContextInternalCalls {
+        require(canStore(node));
         stakes[node].storageUsed = stakes[node].storageUsed.add(1);
     }
 

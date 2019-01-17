@@ -10,15 +10,20 @@ This Source Code Form is “Incompatible With Secondary Licenses”, as defined 
 pragma solidity ^0.4.23;
 
 import "../Storage/AtlasStakeStore.sol";
+import "../Configuration/Consts.sol";
 
 
 contract AtlasStakeStoreMock is AtlasStakeStore {
 
-    constructor(Head _head, ShelteringQueuesStore _queuesStore) public AtlasStakeStore(_head, _queuesStore) {
+    constructor(Head _head, ShelteringQueuesStore _shelteringQueuesStore) public AtlasStakeStore(_head, _shelteringQueuesStore) {
     }
 
     function setStorageUsed(address node, uint storageUsed) public {
         stakes[node].storageUsed = storageUsed;
+    }
+
+    function setNodeType(address node, Consts.SecondaryNodeType nodeType) public {
+        stakes[node].nodeType = nodeType;
     }
 
     function setNumberOfStakers(uint32 _numberOfStakers) public {

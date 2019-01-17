@@ -14,7 +14,7 @@ import "../Storage/ChallengesStore.sol";
 
 contract ChallengesStoreMock is ChallengesStore {
 
-    constructor(Head _head, ShelteringQueuesStore _queuesStore, Config _config) public ChallengesStore(_head, _config, _queuesStore) {
+    constructor(Head _head, ShelteringQueuesStore _shelteringQueuesStore, Config _config) public ChallengesStore(_head, _config, _shelteringQueuesStore) {
     }
 
     function injectChallenge(
