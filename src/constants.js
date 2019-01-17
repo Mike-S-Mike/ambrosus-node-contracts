@@ -15,7 +15,11 @@ export const NONE = '0';
 export const ATLAS = '1';
 export const HERMES = '2';
 export const APOLLO = '3';
+export const ZETA = '1';
+export const SIGMA = '2';
+export const OMEGA = '3';
 export const ROLE_CODES = {NONE, ATLAS, HERMES, APOLLO};
+export const ROLE_SECONDARY_CODES = {NONE, ZETA, SIGMA, OMEGA};
 export const ROLE_REVERSE_CODES = {[NONE]: 'NONE', [ATLAS]: 'ATLAS', [HERMES]: 'HERMES', [APOLLO]: 'APOLLO'};
 
 export const ATLAS1_STAKE = utils.toWei('10000');

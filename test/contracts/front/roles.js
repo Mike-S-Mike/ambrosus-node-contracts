@@ -18,11 +18,11 @@ import {
   APOLLO_DEPOSIT,
   ATLAS,
   ATLAS1_STAKE,
-  ATLAS1_STORAGE_LIMIT,
+  ZETA,
   ATLAS2_STAKE,
-  ATLAS2_STORAGE_LIMIT,
+  SIGMA,
   ATLAS3_STAKE,
-  ATLAS3_STORAGE_LIMIT,
+  OMEGA,
   HERMES
 } from '../../../src/constants';
 import observeBalanceChange from '../../helpers/web3BalanceObserver';
@@ -67,7 +67,7 @@ describe('Roles Contract', () => {
   const canOnboardAsHermes = async (address, value) => roles.methods.canOnboard(address, HERMES, value).call();
   const canOnboardAsApollo = async (address, value) => roles.methods.canOnboard(address, APOLLO, value).call();
   const getRole = async (address) => roles.methods.getOnboardedRole(address).call();
-  const getStorageLimitForAtlas = async (value) => roles.methods.getStorageLimitForAtlas(value).call();
+  const getNodeTypeForAtlas = async (value) => roles.methods.getNodeTypeForAtlas(value).call();
   const getUrl = async (address) => roles.methods.getUrl(address).call();
   const getStake = async (address) => atlasStakeStore.methods.getStake(address).call();
   const isDepositing = async (address) => apolloDepositStore.methods.isDepositing(address).call();
@@ -95,7 +95,8 @@ describe('Roles Contract', () => {
         apolloDepositStore: true,
         validatorProxy: true,
         validatorSet: true,
-        blockRewards: true
+        blockRewards: true,
+        shelteringQueuesStore: true
       },
       params: {
         validatorSet: {
@@ -319,23 +320,23 @@ describe('Roles Contract', () => {
     });
   });
 
-  describe('getStorageLimit', () => {
+  describe('getNodeType', () => {
     it('Atlas 3', async () => {
-      expect(await getStorageLimitForAtlas(ATLAS3_STAKE_BN.add(ONE).toString())).to.eq('0');
-      expect(await getStorageLimitForAtlas(ATLAS3_STAKE_BN.sub(ONE).toString())).to.eq('0');
-      expect(await getStorageLimitForAtlas(ATLAS3_STAKE_BN)).to.eq(ATLAS3_STORAGE_LIMIT);
+      expect(await getNodeTypeForAtlas(ATLAS3_STAKE_BN.add(ONE).toString())).to.eq('0');
+      expect(await getNodeTypeForAtlas(ATLAS3_STAKE_BN.sub(ONE).toString())).to.eq('0');
+      expect(await getNodeTypeForAtlas(ATLAS3_STAKE_BN)).to.eq(OMEGA.toString());
     });
 
     it('Atlas 2', async () => {
-      expect(await getStorageLimitForAtlas(ATLAS3_STAKE_BN.sub(ONE).toString())).to.eq('0');
-      expect(await getStorageLimitForAtlas(ATLAS2_STAKE_BN.add(ONE).toString())).to.eq('0');
-      expect(await getStorageLimitForAtlas(ATLAS2_STAKE_BN)).to.eq(ATLAS2_STORAGE_LIMIT);
+      expect(await getNodeTypeForAtlas(ATLAS3_STAKE_BN.sub(ONE).toString())).to.eq('0');
+      expect(await getNodeTypeForAtlas(ATLAS2_STAKE_BN.add(ONE).toString())).to.eq('0');
+      expect(await getNodeTypeForAtlas(ATLAS2_STAKE_BN)).to.eq(SIGMA.toString());
     });
 
     it('Atlas 1', async () => {
-      expect(await getStorageLimitForAtlas(ATLAS2_STAKE_BN.sub(ONE).toString())).to.eq('0');
-      expect(await getStorageLimitForAtlas(ATLAS1_STAKE_BN.add(ONE).toString())).to.eq('0');
-      expect(await getStorageLimitForAtlas(ATLAS1_STAKE_BN)).to.eq(ATLAS1_STORAGE_LIMIT);
+      expect(await getNodeTypeForAtlas(ATLAS2_STAKE_BN.sub(ONE).toString())).to.eq('0');
+      expect(await getNodeTypeForAtlas(ATLAS1_STAKE_BN.add(ONE).toString())).to.eq('0');
+      expect(await getNodeTypeForAtlas(ATLAS1_STAKE_BN)).to.eq(ZETA.toString());
     });
   });
 
