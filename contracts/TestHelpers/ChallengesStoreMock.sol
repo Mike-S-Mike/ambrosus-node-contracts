@@ -14,7 +14,7 @@ import "../Storage/ChallengesStore.sol";
 
 contract ChallengesStoreMock is ChallengesStore {
 
-    constructor(Head _head) public ChallengesStore(_head) {
+    constructor(Head _head, ShelteringQueuesStore _queuesStore, Config _config) public ChallengesStore(_head, _config, _queuesStore) {
     }
 
     function injectChallenge(
@@ -27,9 +27,9 @@ contract ChallengesStoreMock is ChallengesStore {
         uint sequenceNumber)
     public payable returns (bytes32)
     {
-        bytes32 challengeId = getChallengeId(sheltererId, bundleId);
-        challenges[challengeId] = Challenge(sheltererId, bundleId, challengerId, feePerChallenge, creationTime, activeCount, sequenceNumber);
-        activeChallengesOnBundleCount[bundleId] = activeChallengesOnBundleCount[bundleId].add(activeCount).castTo32();
+        bytes32 challengeId = getChallengeId(sheltererId, bundleId, sequenceNumber);
+        challenges[challengeId] = Challenge(sheltererId, bundleId, challengerId, feePerChallenge, creationTime, sequenceNumber, true, 0x0, uint64(now));
+        activeChallengesOnBundleCount[bundleId] = activeChallengesOnBundleCount[bundleId].add(1).castTo32();
         return challengeId;
     }
 }

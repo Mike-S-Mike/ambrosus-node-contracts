@@ -12,6 +12,8 @@ pragma solidity ^0.4.23;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "../Lib/SafeMathExtensions.sol";
 import "../Boilerplate/Head.sol";
+import "../Configuration/Consts.sol";
+import "./ShelteringQueuesStore.sol";
 
 
 contract AtlasStakeStore is Base {
@@ -23,17 +25,20 @@ contract AtlasStakeStore is Base {
     struct Stake {
         uint initialAmount;
         uint amount;
-        uint storageLimit;
         uint storageUsed;
         uint64 lastPenaltyTime;
         uint penaltiesCount;
         uint lastChallengeResolvedSequenceNumber;
+        Consts.SecondaryNodeType nodeType;
     }
 
     mapping (address => Stake) stakes;
     uint32 numberOfStakers;
+    ShelteringQueuesStore shelteringQueues;
 
-    constructor(Head _head) public Base(_head) {}
+    constructor(Head _head, ShelteringQueuesStore _shelteringQueuesStore) public Base(_head) {
+        shelteringQueues = _shelteringQueuesStore;
+    }
 
     function isStaking(address node) public view returns (bool) {
         return stakes[node].initialAmount > 0;
@@ -44,15 +49,15 @@ contract AtlasStakeStore is Base {
     }
 
     function canStore(address node) public view returns (bool) {
-        return stakes[node].storageUsed < stakes[node].storageLimit;
+        return true;
     }
 
     function getStorageUsed(address node) public view returns (uint) {
         return stakes[node].storageUsed;
     }
 
-    function getStorageLimit(address node) public view returns (uint) {
-        return stakes[node].storageLimit;
+    function getNodeType(address node) public view returns (Consts.SecondaryNodeType) {
+        return stakes[node].nodeType;
     }
 
     function getStake(address node) public view returns (uint) {
@@ -67,24 +72,27 @@ contract AtlasStakeStore is Base {
         return stakes[node].initialAmount;
     }
 
-    function depositStake(address _who, uint _storageLimit) public payable onlyContextInternalCalls {
+    function depositStake(address _who, Consts.SecondaryNodeType _nodeType) public payable onlyContextInternalCalls {
         require(!isStaking(_who));
 
         stakes[_who].initialAmount = msg.value;
         stakes[_who].amount = msg.value;
-        stakes[_who].storageLimit = _storageLimit;
+        stakes[_who].nodeType = _nodeType;
         stakes[_who].storageUsed = 0;
         numberOfStakers = numberOfStakers.add(1).castTo32();
+
+        shelteringQueues.addShelterer(_who, _nodeType);
     }
 
     function releaseStake(address node, address refundAddress) public onlyContextInternalCalls returns(uint) {
         require(isStaking(node));
         require(refundAddress != address(0));
         require(!isShelteringAny(node));
+        shelteringQueues.removeShelterer(node, stakes[node].nodeType);
         uint amount = stakes[node].amount;
         stakes[node].initialAmount = 0;
         stakes[node].amount = 0;
-        stakes[node].storageLimit = 0;
+        stakes[node].nodeType = Consts.SecondaryNodeType.NONE;
         stakes[node].storageUsed = 0;
         numberOfStakers = numberOfStakers.sub(1).castTo32();
         refundAddress.transfer(amount);

@@ -14,7 +14,7 @@ import "../Storage/AtlasStakeStore.sol";
 
 contract AtlasStakeStoreMock is AtlasStakeStore {
 
-    constructor(Head _head) public AtlasStakeStore(_head) {
+    constructor(Head _head, ShelteringQueuesStore _queuesStore) public AtlasStakeStore(_head, _queuesStore) {
     }
 
     function setStorageUsed(address node, uint storageUsed) public {

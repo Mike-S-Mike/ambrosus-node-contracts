@@ -34,11 +34,13 @@ import ApolloDepositStoreJson from './contracts/ApolloDepositStore.json';
 import ValidatorProxyJson from './contracts/ValidatorProxy.json';
 import SuperSpeedConfig from './contracts/SuperSpeedConfig.json';
 import SuperSpeedTime from './contracts/SuperSpeedTime.json';
+import ShelteringQueuesStoreJson from './contracts/ShelteringQueuesStore.json';
 
 const contractJsons = {
   head: HeadJson,
   context: ContextJson,
   catalogue: CatalogueJson,
+  shelteringQueuesStore: ShelteringQueuesStoreJson,
   storageCatalogue: StorageCatalogueJson,
   validatorSet: ValidatorSetJson,
   blockRewards: BlockRewardsJson,

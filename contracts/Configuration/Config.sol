@@ -29,9 +29,10 @@ contract Config {
     uint constant public ATLAS2_STAKE = 30000 ether;
     uint constant public ATLAS3_STAKE = 75000 ether;
 
-    uint constant public ATLAS1_STORAGE_LIMIT = 100000;
-    uint constant public ATLAS2_STORAGE_LIMIT = 400000;
-    uint constant public ATLAS3_STORAGE_LIMIT = 1000000;
+    uint constant public ATLAS1_SHELTERING_DIVISOR = 17;
+    uint constant public ATLAS2_SHELTERING_DIVISOR = 4;
+    
+    uint32 constant public SHELTERING_RESERVATION_TIME = 1 days;
 
     uint constant public SHELTERING_CAP_ATLASES_PERCENTAGE = 80;
     uint constant public SHELTERING_CAP_ATLAS_NUMBER_THRESHOLD = 8;
