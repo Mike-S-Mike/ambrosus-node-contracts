@@ -27,8 +27,8 @@ contract ChallengesStoreMock is ChallengesStore {
         uint sequenceNumber)
     public payable returns (bytes32)
     {
-        bytes32 challengeId = getChallengeId(sheltererId, bundleId, sequenceNumber);
-        challenges[challengeId] = Challenge(sheltererId, bundleId, challengerId, feePerChallenge, creationTime, sequenceNumber, true, 0x0, uint64(now));
+        bytes32 challengeId = getChallengeId(sheltererId, bundleId);
+        challenges[challengeId] = Challenge(sheltererId, bundleId, challengerId, feePerChallenge, creationTime, activeCount, sequenceNumber, creationTime);
         activeChallengesOnBundleCount[bundleId] = activeChallengesOnBundleCount[bundleId].add(1).castTo32();
         return challengeId;
     }

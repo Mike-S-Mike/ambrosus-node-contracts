@@ -48,10 +48,6 @@ contract AtlasStakeStore is Base {
         return numberOfStakers;
     }
 
-    function canStore(address node) public view returns (bool) {
-        return true;
-    }
-
     function getStorageUsed(address node) public view returns (uint) {
         return stakes[node].storageUsed;
     }
@@ -121,7 +117,6 @@ contract AtlasStakeStore is Base {
     }
 
     function incrementStorageUsed(address node) public onlyContextInternalCalls {
-        require(canStore(node));
         stakes[node].storageUsed = stakes[node].storageUsed.add(1);
     }
 

@@ -30,14 +30,13 @@ contract ChallengesStore is Base {
         address challengerId;
         uint feePerChallenge;
         uint64 creationTime;
+        uint8 activeCount;
         uint sequenceNumber;
-        bool active;
-        address designatedSheltererId;
         uint64 bookedShelteringExpirationTime;
+        mapping(address => bool) designatedShelterers;
     }
 
     mapping(bytes32 => Challenge) challenges;
-    mapping(bytes32 => uint32) activeChallengesCount;
     mapping(bytes32 => uint32) activeChallengesOnBundleCount;
     uint nextChallengeSequenceNumber;
     ShelteringQueuesStore storeQueues;
@@ -58,38 +57,33 @@ contract ChallengesStore is Base {
         uint feePerChallenge,
         uint64 creationTime,
         uint8 activeCount)
-    public payable onlyContextInternalCalls returns (bytes32[])
+    public payable onlyContextInternalCalls returns (bytes32)
     {
-        bytes32[] memory challengeIds = new bytes32[](activeCount);
+        bytes32 challengeId = getChallengeId(sheltererId, bundleId);
+        challenges[challengeId] = Challenge(
+            sheltererId, 
+            bundleId, 
+            challengerId, 
+            feePerChallenge, 
+            creationTime, 
+            activeCount,
+            nextChallengeSequenceNumber,
+            creationTime + config.SHELTERING_RESERVATION_TIME());
+
         for (uint8 i = 0; i < activeCount; i++) {
-            bytes32 challengeId = getChallengeId(sheltererId, bundleId, nextChallengeSequenceNumber);
-            Consts.SecondaryNodeType nodeType = getNextChallengeNodeType();
+            Consts.SecondaryNodeType nodeType = getChallengeNodeType(nextChallengeSequenceNumber);
             address designatedShelterer = storeQueues.rotateRound(nodeType);
-            challenges[challengeId] = Challenge(
-                sheltererId, 
-                bundleId, 
-                challengerId, 
-                feePerChallenge, 
-                creationTime, 
-                nextChallengeSequenceNumber, 
-                true,
-                designatedShelterer, 
-                creationTime + config.SHELTERING_RESERVATION_TIME());
+            challenges[challengeId].designatedShelterers[designatedShelterer] = true;
             incrementNextChallengeSequenceNumber(1);
-            challengeIds[i] = challengeId;
         }
-        uint32 value = activeChallengesOnBundleCount[bundleId];
-        activeChallengesOnBundleCount[bundleId] = value.add(activeCount).castTo32();
-        bytes32 activeChallengeId = getActiveChallengeId(sheltererId, bundleId);
-        activeChallengesCount[activeChallengeId] = activeChallengesCount[activeChallengeId].add(activeCount).castTo32();
-        return challengeIds;
+
+        activeChallengesOnBundleCount[bundleId] = activeChallengesOnBundleCount[bundleId].add(activeCount).castTo32();
+        return challengeId;
     }
 
     function remove(bytes32 challengeId) public onlyContextInternalCalls {
         activeChallengesOnBundleCount[challenges[challengeId].bundleId] = activeChallengesOnBundleCount[
-            challenges[challengeId].bundleId].sub(1).castTo32();
-        bytes32 activeChallengeId = getActiveChallengeId(challenges[challengeId].sheltererId, challenges[challengeId].bundleId);
-        activeChallengesCount[activeChallengeId] = activeChallengesCount[activeChallengeId].sub(1).castTo32();
+            challenges[challengeId].bundleId].sub(challenges[challengeId].activeCount).castTo32();
         delete challenges[challengeId];
     }
 
@@ -97,7 +91,7 @@ contract ChallengesStore is Base {
         refundAddress.transfer(amountToReturn);
     }
 
-    function getChallenge(bytes32 challengeId) public view returns (address, bytes32, address, uint, uint64, uint, bool, address, uint64) {
+    function getChallenge(bytes32 challengeId) public view returns (address, bytes32, address, uint, uint64, uint8, uint, uint64) {
         Challenge storage challenge = challenges[challengeId];
         return (
         challenge.sheltererId,
@@ -105,42 +99,73 @@ contract ChallengesStore is Base {
         challenge.challengerId,
         challenge.feePerChallenge,
         challenge.creationTime,
+        challenge.activeCount,
         challenge.sequenceNumber,
-        challenge.active,
-        challenge.designatedSheltererId,
         challenge.bookedShelteringExpirationTime
         );
+    }
+
+    function getChallengeId(address sheltererId, bytes32 bundleId) public view onlyContextInternalCalls returns (bytes32) {
+        return keccak256(abi.encodePacked(sheltererId, bundleId));
+    }
+
+    function decreaseActiveCount(bytes32 challengeId) public onlyContextInternalCalls {
+        activeChallengesOnBundleCount[challenges[challengeId].bundleId] = activeChallengesOnBundleCount[
+            challenges[challengeId].bundleId].sub(1).castTo32();
+        challenges[challengeId].activeCount = challenges[challengeId].activeCount.sub(1).castTo8();
+        challenges[challengeId].sequenceNumber++;
     }
 
     function getActiveChallengesOnBundleCount(bytes32 bundleId) public view onlyContextInternalCalls returns (uint32) {
         return activeChallengesOnBundleCount[bundleId];
     }
 
-    function getActiveChallenge(address sheltererId, bytes32 bundleId) public view onlyContextInternalCalls returns (bool) {
-        bytes32 activeChallengeId = getActiveChallengeId(sheltererId, bundleId);
-        return activeChallengesCount[activeChallengeId] > 0;
-    }
-
     function getNextChallengeSequenceNumber() public view onlyContextInternalCalls returns (uint) {
         return nextChallengeSequenceNumber;
     }
 
-    function getChallengeId(address sheltererId, bytes32 bundleId, uint sequence) internal view returns (bytes32) {
-        return keccak256(abi.encodePacked(sheltererId, bundleId, sequence));
+    function isDesignatedShelterer(address sheltererId, bytes32 challengeId) public view onlyContextInternalCalls returns (bool) {
+        return challenges[challengeId].designatedShelterers[sheltererId];
+    }
+
+    function isNodeTypeAvailable(Consts.SecondaryNodeType nodeType, bytes32 challengeId) public view onlyContextInternalCalls returns (bool) {
+        uint sequenceNumber = challenges[challengeId].sequenceNumber;
+        Consts.SecondaryNodeType currentType = getChallengeNodeType(sequenceNumber);
+        if (currentType == nodeType) {
+            return true;
+        }
+        
+        uint8 activeCount = challenges[challengeId].activeCount;
+        if (nodeType == Consts.SecondaryNodeType.OMEGA) {
+            if (activeCount > 2) {
+                return true;
+            }
+            return getChallengeNodeType(sequenceNumber + activeCount - 1) == Consts.SecondaryNodeType.OMEGA;
+        }
+        uint divisor = config.ATLAS1_SHELTERING_DIVISOR();
+        if (nodeType == Consts.SecondaryNodeType.SIGMA) {
+            divisor = config.ATLAS2_SHELTERING_DIVISOR();
+        }
+        return checkDivisor(divisor, sequenceNumber, activeCount);
+    }
+
+    function checkDivisor(uint divisor, uint sequenceNumber, uint8 activeCount) private pure returns (bool) {
+        if (activeCount > divisor) {
+            return true;
+        }
+        uint first = sequenceNumber;
+        uint last = sequenceNumber + activeCount - 1;
+        return first.mod(divisor) > last.mod(divisor);
     }
 
     function incrementNextChallengeSequenceNumber(uint amount) private {
         nextChallengeSequenceNumber += amount;
     }
 
-    function getActiveChallengeId(address sheltererId, bytes32 bundleId) private view returns (bytes32) {
-        return keccak256(abi.encodePacked(sheltererId, bundleId));
-    }
-
-    function getNextChallengeNodeType() private view returns (Consts.SecondaryNodeType) {
-        if (nextChallengeSequenceNumber.mod(config.ATLAS1_SHELTERING_DIVISOR()) == 0) {
+    function getChallengeNodeType(uint sequenceNumber) private view returns (Consts.SecondaryNodeType) {
+        if (sequenceNumber.mod(config.ATLAS1_SHELTERING_DIVISOR()) == 0) {
             return Consts.SecondaryNodeType.ZETA;
-        } else if (nextChallengeSequenceNumber.mod(config.ATLAS2_SHELTERING_DIVISOR()) == 0) {
+        } else if (sequenceNumber.mod(config.ATLAS2_SHELTERING_DIVISOR()) == 0) {
             return Consts.SecondaryNodeType.SIGMA;
         }
         return Consts.SecondaryNodeType.OMEGA;
