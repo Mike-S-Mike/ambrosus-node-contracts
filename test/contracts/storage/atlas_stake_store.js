@@ -14,6 +14,9 @@ import deploy from '../../helpers/deploy';
 import BN from 'bn.js';
 import observeBalanceChange from '../../helpers/web3BalanceObserver';
 import {createWeb3, makeSnapshot, restoreSnapshot} from '../../../src/utils/web3_tools';
+import {
+  ZETA
+} from '../../../src/constants';
 
 chai.use(sinonChai);
 chai.use(chaiAsPromised);
@@ -29,13 +32,12 @@ describe('AtlasStakeStore Contract', () => {
   let snapshotId;
 
   const isStaking = async (sheltererId) => atlasStakeStore.methods.isStaking(sheltererId).call();
-  const canStore = async (sheltererId) => atlasStakeStore.methods.canStore(sheltererId).call();
   const isShelteringAny = async (sheltererId) => atlasStakeStore.methods.isShelteringAny(sheltererId).call();
-  const depositStake = async (sheltererId, storageLimit, stake, sender = deployer) => atlasStakeStore.methods.depositStake(sheltererId, storageLimit).send({from: sender, value: stake});
+  const depositStake = async (sheltererId, nodeType, stake, sender = deployer) => atlasStakeStore.methods.depositStake(sheltererId, nodeType).send({from: sender, value: stake});
   const releaseStake = async (sheltererId, refundAddress, sender = deployer, options = {}) => atlasStakeStore.methods.releaseStake(sheltererId, refundAddress).send({from: sender, ...options});
   const slash = async (sheltererId, refundAddress, penalty, sender = deployer) => atlasStakeStore.methods.slash(sheltererId, refundAddress, penalty).send({from: sender});
   const getStake = async (sheltererId) => atlasStakeStore.methods.getStake(sheltererId).call();
-  const getStorageLimit = async (sheltererId) => atlasStakeStore.methods.getStorageLimit(sheltererId).call();
+  const getNodeType = async (sheltererId) => atlasStakeStore.methods.getNodeType(sheltererId).call();
   const getStorageUsed = async (sheltererId) => atlasStakeStore.methods.getStorageUsed(sheltererId).call();
   const getNumberOfStakers = async () => atlasStakeStore.methods.getNumberOfStakers().call();
   const incrementStorageUsed = async (sheltererId, sender = deployer) => atlasStakeStore.methods.incrementStorageUsed(sheltererId).send({from: sender});
@@ -54,7 +56,8 @@ describe('AtlasStakeStore Contract', () => {
       web3,
       sender: deployer,
       contracts: {
-        atlasStakeStore: true
+        atlasStakeStore: true,
+        shelteringQueuesStore: true
       }
     }));
   });
@@ -70,9 +73,9 @@ describe('AtlasStakeStore Contract', () => {
   describe('Deployment', () => {
     it('properly initialized', async () => {
       expect(await isStaking(shelterer)).to.be.false;
-      expect(await canStore(shelterer)).to.be.false;
       expect(await isShelteringAny(shelterer)).to.be.false;
       expect(await getStorageUsed(shelterer)).to.be.eq('0');
+      expect(await getNodeType(shelterer)).to.be.eq('0');
     });
   });
 
@@ -82,22 +85,21 @@ describe('AtlasStakeStore Contract', () => {
     const exampleChallengeSequenceNumber = '10';
 
     it('can not stake if already staking', async () => {
-      await depositStake(shelterer, 1, 1);
-      await expect(depositStake(shelterer, 1, 2)).to.be.eventually.rejected;
+      await depositStake(shelterer, ZETA, 1);
+      await expect(depositStake(shelterer, ZETA, 2)).to.be.eventually.rejected;
       expect(await getStake(shelterer)).to.eq('1');
     });
 
     it('reject if not context internal call', async () => {
-      await expect(depositStake(shelterer, 1, 1, otherAddress)).to.be.eventually.rejected;
+      await expect(depositStake(shelterer, ZETA, 1, otherAddress)).to.be.eventually.rejected;
     });
 
     it('initiate stake', async () => {
-      await depositStake(shelterer, 1, 2);
+      await depositStake(shelterer, ZETA, 2);
       expect(await isStaking(shelterer)).to.be.true;
-      expect(await canStore(shelterer)).to.be.true;
       expect(await isShelteringAny(shelterer)).to.be.false;
       expect(await getStorageUsed(shelterer)).to.be.eq('0');
-      expect(await getStorageLimit(shelterer)).to.eq('1');
+      expect(await getNodeType(shelterer)).to.eq(ZETA.toString());
       expect(await getPenaltiesHistory(shelterer)).to.deep.include({
         lastPenaltyTime: '0',
         penaltiesCount: '0'
@@ -106,12 +108,12 @@ describe('AtlasStakeStore Contract', () => {
     });
 
     it('depositing stake doesn’t change the penalty and cooldown data', async () => {
-      await depositStake(shelterer, 1, 2);
+      await depositStake(shelterer, ZETA, 2);
       await setPenaltyHistory(shelterer, examplePenaltyCount, examplePenaltyTimestamp);
       await updateLastChallengeResolvedSequenceNumber(shelterer, exampleChallengeSequenceNumber);
 
       await releaseStake(shelterer, otherAddress);
-      await depositStake(shelterer, 1, 2);
+      await depositStake(shelterer, ZETA, 2);
 
       const penaltiesHistory = await getPenaltiesHistory(shelterer);
       expect(penaltiesHistory.penaltiesCount).to.be.equal(examplePenaltyCount);
@@ -123,9 +125,9 @@ describe('AtlasStakeStore Contract', () => {
 
     it('increments the number of stakers', async () => {
       expect(await getNumberOfStakers()).to.equal('0');
-      await depositStake(shelterer, 1, 2);
+      await depositStake(shelterer, ZETA, 2);
       expect(await getNumberOfStakers()).to.equal('1');
-      await depositStake(otherAddress, 1, 2);
+      await depositStake(otherAddress, ZETA, 2);
       expect(await getNumberOfStakers()).to.equal('2');
     });
   });
@@ -136,12 +138,12 @@ describe('AtlasStakeStore Contract', () => {
     });
 
     it('reject if not context internal call', async () => {
-      await depositStake(shelterer, 1, 1);
+      await depositStake(shelterer, ZETA, 1);
       await expect(updateLastChallengeResolvedSequenceNumber(shelterer, 1, otherAddress)).to.be.eventually.rejected;
     });
 
     it('updates last challenge resolved sequence number', async () => {
-      await depositStake(shelterer, 1, 1);
+      await depositStake(shelterer, ZETA, 1);
       await expect(updateLastChallengeResolvedSequenceNumber(shelterer, 100)).to.be.eventually.fulfilled;
       expect(await getLastChallengeResolvedSequenceNumber(shelterer)).to.equal('100');
     });
@@ -149,13 +151,13 @@ describe('AtlasStakeStore Contract', () => {
 
   describe('Increment storage used', () => {
     beforeEach(async () => {
-      await depositStake(shelterer, 1, 1);
+      await depositStake(shelterer, ZETA, 1);
     });
 
     it('properly updates contract state', async () => {
       await incrementStorageUsed(shelterer);
       expect(await isStaking(shelterer)).to.be.true;
-      expect(await canStore(shelterer)).to.be.false;
+      expect(await getNodeType(shelterer)).to.eq(ZETA.toString());
       expect(await isShelteringAny(shelterer)).to.be.true;
       expect(await getStorageUsed(shelterer)).to.be.eq('1');
     });
@@ -163,23 +165,18 @@ describe('AtlasStakeStore Contract', () => {
     it('reject if not context internal call', async () => {
       await expect(incrementStorageUsed(shelterer, otherAddress)).to.be.eventually.rejected;
     });
-
-    it('reject if run out of limit reached', async () => {
-      await incrementStorageUsed(shelterer);
-      await expect(incrementStorageUsed(shelterer)).to.be.eventually.rejected;
-    });
   });
 
   describe('Decrement storage used', () => {
     beforeEach(async () => {
-      await depositStake(shelterer, 1, 1);
+      await depositStake(shelterer, ZETA, 1);
       await incrementStorageUsed(shelterer);
     });
 
     it('properly updates contract state', async () => {
       await decrementStorageUsed(shelterer);
       expect(await isStaking(shelterer)).to.be.true;
-      expect(await canStore(shelterer)).to.be.true;
+      expect(await getNodeType(shelterer)).to.eq(ZETA.toString());
       expect(await isShelteringAny(shelterer)).to.be.false;
       expect(await getStorageUsed(shelterer)).to.be.eq('0');
     });
@@ -201,13 +198,13 @@ describe('AtlasStakeStore Contract', () => {
     const exampleChallengeSequenceNumber = '10';
 
     beforeEach(async () => {
-      await depositStake(shelterer, 1, stake);
+      await depositStake(shelterer, ZETA, stake);
     });
 
     it('properly updates contract state', async () => {
       await releaseStake(shelterer, otherAddress);
       expect(await isStaking(shelterer)).to.be.false;
-      expect(await canStore(shelterer)).to.be.false;
+      expect(await getNodeType(shelterer)).to.eq('0');
       expect(await isShelteringAny(shelterer)).to.be.false;
       expect(await getStorageUsed(shelterer)).to.be.eq('0');
       expect(await getStake(shelterer)).to.be.eq('0');
@@ -264,7 +261,7 @@ describe('AtlasStakeStore Contract', () => {
     const penalty = stake / 100;
 
     beforeEach(async () => {
-      await depositStake(shelterer, 10, stake);
+      await depositStake(shelterer, ZETA, stake);
     });
 
     it('can not slash if not staking', async () => {
