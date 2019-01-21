@@ -13,12 +13,17 @@ import {createWeb3, makeSnapshot, restoreSnapshot, utils} from '../../../src/uti
 import deploy from '../../helpers/deploy';
 import observeBalanceChange from '../../helpers/web3BalanceObserver';
 import BN from 'bn.js';
+import {
+  OMEGA,
+  SIGMA,
+  ZETA} from '../../../src/constants';
 
 chai.use(chaiAsPromised);
 const {expect} = chai;
 
 describe('ChallengesStoreContract', () => {
   let challengesStore;
+  let shelteringQueuesStore;
   let web3;
   let snapshotId;
   let deployer;
@@ -26,6 +31,9 @@ describe('ChallengesStoreContract', () => {
   let exampleChallengeId;
   let shelterer;
   let challenger;
+  let atlas1;
+  let atlas2;
+  let atlas3;
   const exampleBundleId = utils.keccak256('someBundleId');
   const feePerChallenge = '130000';
   const creationTime = '1500000000';
@@ -47,18 +55,25 @@ describe('ChallengesStoreContract', () => {
     challengesStore.methods.getChallengeId(sheltererId, bundleId).call();
   const getNextChallengeSequenceNumber = () => challengesStore.methods.getNextChallengeSequenceNumber().call();
   const getActiveChallengesOnBundleCount = (bundleId) => challengesStore.methods.getActiveChallengesOnBundleCount(bundleId).call();
+  const addToQueue = (sheltererId, nodeType) => shelteringQueuesStore.methods.addShelterer(sheltererId, nodeType).send({from: deployer});
 
   before(async () => {
     web3 = await createWeb3();
-    [deployer, shelterer, challenger, otherAddress] = await web3.eth.getAccounts();
-    ({challengesStore} = await deploy({
+    [deployer, shelterer, challenger, otherAddress, atlas1, atlas2, atlas3] = await web3.eth.getAccounts();
+    ({challengesStore, shelteringQueuesStore} = await deploy({
       web3,
       sender: deployer,
       contracts: {
-        challengesStore: true
+        challengesStore: true,
+        config: true,
+        shelteringQueuesStore: true
       }
     }));
     exampleChallengeId = await getChallengeId(shelterer, exampleBundleId);
+
+    await addToQueue(atlas1, ZETA);
+    await addToQueue(atlas2, SIGMA);
+    await addToQueue(atlas3, OMEGA);
   });
 
   beforeEach(async () => {

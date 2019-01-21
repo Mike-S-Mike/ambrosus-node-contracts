@@ -14,7 +14,12 @@ import chaiAsPromised from 'chai-as-promised';
 import sinonChai from 'sinon-chai';
 import chaiEmitEvents from '../../helpers/chaiEmitEvents';
 import deploy from '../../helpers/deploy';
-import {ATLAS, HERMES} from '../../../src/constants';
+import {
+  ATLAS,
+  OMEGA,
+  SIGMA,
+  ZETA,
+  HERMES} from '../../../src/constants';
 import {SYSTEM_CHALLENGES_COUNT} from '../../helpers/consts';
 import {createWeb3, makeSnapshot, restoreSnapshot, utils} from '../../../src/utils/web3_tools';
 import BN from 'bn.js';
@@ -36,18 +41,23 @@ describe('Upload Contract', () => {
   let challenges;
   let rolesStore;
   let bundleStore;
+  let shelteringQueuesStore;
   let fees;
   let fee;
-  let atlas;
+  let atlas1;
+  let atlas2;
+  let atlas3;
   let other;
   let hermes;
   let snapshotId;
+  let context;
 
   const expectedMinersFee = () => fee.mul(new BN(3)).div(new BN(10));
+  const addToQueue = async (sheltererId, nodeType) => shelteringQueuesStore.methods.addShelterer(sheltererId, nodeType).send({from: context});
 
   before(async () => {
     web3 = await createWeb3();
-    ({uploads, fees, challenges, bundleStore, rolesStore} = await deploy({
+    ({uploads, fees, challenges, bundleStore, rolesStore, shelteringQueuesStore} = await deploy({
       web3,
       contracts: {
         rolesStore: true,
@@ -58,12 +68,19 @@ describe('Upload Contract', () => {
         time: true,
         fees: true,
         config: true,
-        bundleStore: true}
+        bundleStore: true,
+        shelteringQueuesStore: true}
     }));
-    [hermes, atlas, other] = await web3.eth.getAccounts();
+    [context, hermes, atlas1, atlas2, atlas3, other] = await web3.eth.getAccounts();
     fee = new BN(await fees.methods.getFeeForUpload(1).call());
-    await rolesStore.methods.setRole(hermes, HERMES).send({from: hermes});
-    await rolesStore.methods.setRole(atlas, ATLAS).send({from: hermes});
+    await rolesStore.methods.setRole(hermes, HERMES).send({from: context});
+    await rolesStore.methods.setRole(atlas1, ATLAS).send({from: context});
+    await rolesStore.methods.setRole(atlas2, ATLAS).send({from: context});
+    await rolesStore.methods.setRole(atlas3, ATLAS).send({from: context});
+    
+    await addToQueue(atlas1, ZETA);
+    await addToQueue(atlas2, SIGMA);
+    await addToQueue(atlas3, OMEGA);
   });
 
   beforeEach(async () => {
@@ -100,7 +117,7 @@ describe('Upload Contract', () => {
   });
 
   it(`fails if sender is not a Hermes`, async () => {
-    await expect(uploads.methods.registerBundle(bundleId, 1).send({from: atlas, value: fee}))
+    await expect(uploads.methods.registerBundle(bundleId, 1).send({from: atlas1, value: fee}))
       .to.be.eventually.rejected;
     await expect(uploads.methods.registerBundle(bundleId, 1).send({from: other, value: fee}))
       .to.be.eventually.rejected;

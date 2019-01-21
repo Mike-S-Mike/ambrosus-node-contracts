@@ -16,7 +16,8 @@ import BN from 'bn.js';
 import {
   ATLAS,
   ATLAS1_STAKE,
-  ATLAS1_STORAGE_LIMIT
+  ATLAS2_STAKE,
+  ATLAS3_STAKE
 } from '../../../src/constants';
 import {ONE, DAY, SYSTEM_CHALLENGES_COUNT} from '../../helpers/consts';
 import deploy from '../../helpers/deploy';
@@ -49,6 +50,9 @@ describe('Challenges Contract', () => {
   let shelterer;
   let resolver;
   let totalStranger;
+  let atlas1;
+  let atlas2;
+  let atlas3;
   let time;
   let challengeId;
   let systemChallengeId;
@@ -60,13 +64,13 @@ describe('Challenges Contract', () => {
   const shelteringReward = 130000;
   const storagePeriods = 1;
   const totalReward = 130000;
+  const url = 'url';
 
   const startChallenge = async (sheltererId, bundleId, challengerId, fee) => challenges.methods.start(sheltererId, bundleId).send({from: challengerId, value: fee});
   const startChallengeForSystem = async (uploaderId, bundleId, challengeCount, challengerId, fee) => challenges.methods.startForSystem(uploaderId, bundleId, challengeCount).send({from: challengerId, value: fee});
   const resolveChallenge = async (challengeId, resolverId) => challenges.methods.resolve(challengeId).send({from: resolverId});
   const markChallengeAsExpired = async (challengeId, marker) => challenges.methods.markAsExpired(challengeId).send({from: marker, gasPrice: '0'});
-  const getCooldown = async () => challenges.methods.getCooldown().call();
-
+  
   const getChallengeId = async (sheltererId, bundleId) => challenges.methods.getChallengeId(sheltererId, bundleId).call();
   const getChallengeSequenceNumber = async (challengeId) => challenges.methods.getChallengeSequenceNumber(challengeId).call();
   const getChallengeCreationTime = async (challengeId) => challenges.methods.getChallengeCreationTime(challengeId).call();
@@ -97,12 +101,10 @@ describe('Challenges Contract', () => {
   const setLastChallengeResolvedSequenceNumber = async (nodeId, sequenceNumber) => atlasStakeStore.methods.updateLastChallengeResolvedSequenceNumber(nodeId, sequenceNumber).send({from: context});
   const getStake = async (nodeId) => atlasStakeStore.methods.getStake(nodeId).call();
   const nextChallengeSequenceNumber = async () => challengesStore.methods.getNextChallengeSequenceNumber().call();
-  // eslint-disable-next-line new-cap
-  const getCooldownTimeout = async () => parseInt(await config.methods.COOLDOWN_TIMEOUT().call(), 10);
 
   before(async () => {
     web3 = await createWeb3();
-    [context, challenger, uploader, resolver, shelterer, totalStranger] = await web3.eth.getAccounts();
+    [context, challenger, uploader, resolver, shelterer, totalStranger, atlas1, atlas2, atlas3] = await web3.eth.getAccounts();
     ({challenges, challengesStore, bundleStore, fees, sheltering, kycWhitelist, atlasStakeStore, time, roles, config} = await deploy({
       web3,
       contracts: {
@@ -120,7 +122,8 @@ describe('Challenges Contract', () => {
         config: true,
         payouts: true,
         payoutsStore: true,
-        rolesStore: true
+        rolesStore: true,
+        shelteringQueuesStore: true
       }}));
     await setTimestamp(now);
     await storeBundle(bundleId, uploader, storagePeriods, now);
@@ -140,6 +143,15 @@ describe('Challenges Contract', () => {
 
   describe('Starting system challenges', () => {
     const otherBundleId = utils.keccak256('otherBundleId');
+
+    beforeEach(async () => {
+      await addToKycWhitelist(atlas1, ATLAS, ATLAS1_STAKE);
+      await onboardAsAtlas(url, atlas1, ATLAS1_STAKE);
+      await addToKycWhitelist(atlas2, ATLAS, ATLAS2_STAKE);
+      await onboardAsAtlas(url, atlas2, ATLAS2_STAKE);
+      await addToKycWhitelist(atlas3, ATLAS, ATLAS3_STAKE);
+      await onboardAsAtlas(url, atlas3, ATLAS3_STAKE);
+    });
 
     it('Is context internal', async () => {
       await expect(startChallengeForSystem(uploader, bundleId, SYSTEM_CHALLENGES_COUNT, challenger, systemChallengeFee)).to.be.eventually.rejected;
@@ -244,7 +256,15 @@ describe('Challenges Contract', () => {
 
   describe('Starting user challenge', () => {
     beforeEach(async () => {
-      await depositStake(shelterer, ATLAS1_STORAGE_LIMIT, ATLAS1_STAKE);
+      await addToKycWhitelist(atlas1, ATLAS, ATLAS1_STAKE);
+      await onboardAsAtlas(url, atlas1, ATLAS1_STAKE);
+      await addToKycWhitelist(atlas2, ATLAS, ATLAS2_STAKE);
+      await onboardAsAtlas(url, atlas2, ATLAS2_STAKE);
+      await addToKycWhitelist(atlas3, ATLAS, ATLAS3_STAKE);
+      await onboardAsAtlas(url, atlas3, ATLAS3_STAKE);
+
+      await addToKycWhitelist(shelterer, ATLAS, ATLAS1_STAKE);
+      await onboardAsAtlas(url, shelterer, ATLAS1_STAKE);
       await addShelterer(bundleId, shelterer, totalReward);
     });
 
@@ -356,14 +376,9 @@ describe('Challenges Contract', () => {
   });
 
   describe('Resolving a challenge', () => {
-    const url = 'url';
-    let cooldown;
-
-    const injectChallengeWithSequenceNumber = async (sequenceNumber) => challengesStore.methods.injectChallenge(shelterer, bundleId, challenger, 0, now, 1, sequenceNumber).send({from: context});
-
-    const atlasOnboarding = async (address) => {
-      await addToKycWhitelist(address, ATLAS, ATLAS1_STAKE);
-      await onboardAsAtlas(url, address, ATLAS1_STAKE);
+    const atlasOnboarding = async (address, stake) => {
+      await addToKycWhitelist(address, ATLAS, stake);
+      await onboardAsAtlas(url, address, stake);
     };
 
     const lastChallengeId = async () => {
@@ -372,13 +387,14 @@ describe('Challenges Contract', () => {
     };
 
     beforeEach(async () => {
-      await atlasOnboarding(resolver);
-      await depositStake(shelterer, ATLAS1_STORAGE_LIMIT, ATLAS1_STAKE);
+      await atlasOnboarding(resolver, ATLAS3_STAKE);
+      await atlasOnboarding(shelterer, ATLAS1_STAKE);
+      await atlasOnboarding(atlas1, ATLAS1_STAKE);
+      await atlasOnboarding(atlas2, ATLAS2_STAKE);
+
       await addShelterer(bundleId, shelterer, totalReward);
       await startChallenge(shelterer, bundleId, challenger, userChallengeFee);
       challengeId = await lastChallengeId();
-      await setNumberOfStakers(20);
-      cooldown = parseInt(await getCooldown(), 10);
     });
 
     it('canResolve returns true if challenge can be resolved', async () => {
@@ -412,38 +428,6 @@ describe('Challenges Contract', () => {
       expect(await getChallengeSequenceNumber(challengeId)).to.equal('0');
     });
 
-    it('Can resolve if last resolved challenge is 0', async () => {
-      await setLastChallengeResolvedSequenceNumber(resolver, 0);
-      await injectChallengeWithSequenceNumber(cooldown - 1);
-      expect(await canResolve(resolver, challengeId)).to.be.true;
-      await expect(resolveChallenge(challengeId, resolver)).to.be.eventually.fulfilled;
-    });
-
-    it('Can resolve if difference between last resolved challenge sequence number and the new one is equal to cooldown or greater', async () => {
-      await setLastChallengeResolvedSequenceNumber(resolver, 1);
-      await injectChallengeWithSequenceNumber(cooldown + 1);
-      expect(await canResolve(resolver, challengeId)).to.be.true;
-      await expect(resolveChallenge(challengeId, resolver)).to.be.eventually.fulfilled;
-    });
-
-    it('Can resolve ignoring resolver cooldown if challenge is older than cooldown timeout', async () => {
-      const cooldownTimeout = await getCooldownTimeout();
-      await setLastChallengeResolvedSequenceNumber(resolver, 1);
-      await injectChallengeWithSequenceNumber(cooldown);
-      expect(await canResolve(resolver, challengeId)).to.be.false;
-
-      await setTimestamp(now + cooldownTimeout);
-      expect(await canResolve(resolver, challengeId)).to.be.true;
-      await expect(resolveChallenge(challengeId, resolver)).to.be.eventually.fulfilled;
-    });
-
-    it('Fails to resolve if resolver is on cooldown', async () => {
-      await setLastChallengeResolvedSequenceNumber(resolver, 1);
-      await injectChallengeWithSequenceNumber(cooldown);
-      expect(await canResolve(resolver, challengeId)).to.be.false;
-      await expect(resolveChallenge(challengeId, resolver)).to.be.eventually.rejected;
-    });
-
     it('Fails if challenge does not exist', async () => {
       const fakeChallengeId = utils.keccak256('fakeChallengeId');
       expect(await canResolve(resolver, fakeChallengeId)).to.equal(false);
@@ -452,12 +436,6 @@ describe('Challenges Contract', () => {
 
     it('Fails if resolver is already sheltering challenged bundle', async () => {
       await addSheltererToBundle(bundleId, resolver, shelteringReward, 0, now);
-      expect(await canResolve(resolver, challengeId)).to.equal(false);
-      await expect(resolveChallenge(challengeId, resolver)).to.be.eventually.rejected;
-    });
-
-    it(`Fails if resolver can't store more bundles`, async () => {
-      await setStorageUsed(resolver, ATLAS1_STORAGE_LIMIT);
       expect(await canResolve(resolver, challengeId)).to.equal(false);
       await expect(resolveChallenge(challengeId, resolver)).to.be.eventually.rejected;
     });
@@ -476,7 +454,7 @@ describe('Challenges Contract', () => {
     });
 
     it('Increases sequence number for all resolutions but last', async () => {
-      await atlasOnboarding(totalStranger);
+      await atlasOnboarding(totalStranger, ATLAS3_STAKE);
       const systemFee = userChallengeFee.mul(new BN('2'));
       await startChallengeForSystem(uploader, bundleId, 2, context, systemFee);
       challengeId = await lastChallengeId();
@@ -499,7 +477,15 @@ describe('Challenges Contract', () => {
     const challengeTimeout = 3 * DAY;
 
     beforeEach(async () => {
-      await depositStake(shelterer, ATLAS1_STORAGE_LIMIT, ATLAS1_STAKE);
+      await addToKycWhitelist(atlas1, ATLAS, ATLAS1_STAKE);
+      await onboardAsAtlas(url, atlas1, ATLAS1_STAKE);
+      await addToKycWhitelist(atlas2, ATLAS, ATLAS2_STAKE);
+      await onboardAsAtlas(url, atlas2, ATLAS2_STAKE);
+      await addToKycWhitelist(atlas3, ATLAS, ATLAS3_STAKE);
+      await onboardAsAtlas(url, atlas3, ATLAS3_STAKE);
+      
+      await addToKycWhitelist(shelterer, ATLAS, ATLAS1_STAKE);
+      await onboardAsAtlas(url, shelterer, ATLAS1_STAKE);
       await addShelterer(bundleId, shelterer, userChallengeFee);
 
       await startChallenge(shelterer, bundleId, challenger, userChallengeFee);
@@ -576,6 +562,13 @@ describe('Challenges Contract', () => {
     let systemFee;
 
     beforeEach(async () => {
+      await addToKycWhitelist(atlas1, ATLAS, ATLAS1_STAKE);
+      await onboardAsAtlas(url, atlas1, ATLAS1_STAKE);
+      await addToKycWhitelist(atlas2, ATLAS, ATLAS2_STAKE);
+      await onboardAsAtlas(url, atlas2, ATLAS2_STAKE);
+      await addToKycWhitelist(atlas3, ATLAS, ATLAS3_STAKE);
+      await onboardAsAtlas(url, atlas3, ATLAS3_STAKE);
+
       systemFee = userChallengeFee.mul(new BN('5'));
       await startChallengeForSystem(uploader, bundleId, 5, context, systemFee);
       [systemChallengeCreationEvent] = await challenges.getPastEvents('allEvents');
@@ -589,9 +582,7 @@ describe('Challenges Contract', () => {
     });
 
     it(`Returns fee to creator (part of the fee if partially resolved)`, async () => {
-      await addToKycWhitelist(resolver, ATLAS, ATLAS1_STAKE);
-      await onboardAsAtlas(url, resolver, ATLAS1_STAKE);
-      await resolveChallenge(systemChallengeId, resolver);
+      await resolveChallenge(systemChallengeId, atlas3);
 
       await setTimestamp(now + challengeTimeout + 1);
       expect((await observeBalanceChange(web3, uploader, () => markChallengeAsExpired(systemChallengeId, totalStranger))).toString())
@@ -603,27 +594,6 @@ describe('Challenges Contract', () => {
       expect(await getActiveChallengesCount(systemChallengeId)).to.equal('5');
       await markChallengeAsExpired(systemChallengeId, totalStranger);
       expect(await challengeIsInProgress(systemChallengeId)).to.equal(false);
-    });
-  });
-
-  describe('Calculating cooldown', () => {
-    it('returns 0 if there are less then 4 atlas nodes', async () => {
-      await setNumberOfStakers(2);
-      expect(await getCooldown()).to.equal('0');
-    });
-
-    it('returns the number of atlas nodes minus 4 if less then 50', async () => {
-      await setNumberOfStakers(20);
-      expect(await getCooldown()).to.equal('16');
-    });
-
-    it('returns 90% of the number of atlas nodes (floor) plus 1 if more then 50', async () => {
-      await setNumberOfStakers(51);
-      expect(await getCooldown()).to.equal('46');
-      await setNumberOfStakers(60);
-      expect(await getCooldown()).to.equal('55');
-      await setNumberOfStakers(100);
-      expect(await getCooldown()).to.equal('91');
     });
   });
 });

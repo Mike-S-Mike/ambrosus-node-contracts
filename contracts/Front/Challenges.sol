@@ -86,7 +86,7 @@ contract Challenges is Base {
     }
 
     function resolve(bytes32 challengeId) public {
-        require(canResolve(msg.sender, challengeId));
+        require(canResolve(msg.sender, challengeId), "sender cannot resolve this challenge");
         (address sheltererId, bytes32 bundleId,, uint feePerChallenge,,, uint sequenceNumber,) = challengesStore.getChallenge(challengeId);
         challengesStore.transferFee(this, feePerChallenge);
         sheltering.addShelterer.value(feePerChallenge)(bundleId, msg.sender);
@@ -125,7 +125,7 @@ contract Challenges is Base {
     function canResolve(address resolverId, bytes32 challengeId) public view returns (bool) {
         bytes32 bundleId = getChallengedBundle(challengeId);
         uint64 reserveExpiration = getChallengeReserveExpiration(challengeId);
-        bool isDesignated = isDesignatedShelterer(msg.sender, challengeId) || 
+        bool isDesignated = isDesignatedShelterer(resolverId, challengeId) || 
             (time.currentTimestamp() > reserveExpiration && 
             challengesStore.isNodeTypeAvailable(atlasStakeStore.getNodeType(resolverId), challengeId));
         

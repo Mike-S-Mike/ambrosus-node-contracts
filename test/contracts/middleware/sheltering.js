@@ -99,7 +99,8 @@ describe('Sheltering Contract', () => {
         payoutsStore: true,
         config: true,
         time: TimeMockJson,
-        fees: true
+        fees: true,
+        shelteringQueuesStore: true
       }
     }));
     await setRole(hermes, HERMES);
