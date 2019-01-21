@@ -13,6 +13,8 @@ import deploy from '../test/helpers/deploy';
 import {
   ATLAS,
   ATLAS1_STAKE,
+  ATLAS2_STAKE,
+  ATLAS3_STAKE,
   HERMES
 } from '../src/constants';
 import BN from 'bn.js';
@@ -25,6 +27,8 @@ let perseus;
 let atlasInitialShelterer;
 let atlasQuickResolver;
 let atlasSlowResolver;
+let atlas1;
+let atlas2;
 let challenges;
 let time;
 let kycWhitelist;
@@ -50,6 +54,8 @@ const runGasBenchmark = async () => {
 
   await onboardAsAtlas(atlasQuickResolver);
   await onboardAsAtlas(atlasSlowResolver);
+  await onboardAsAtlas(atlas1, ATLAS1_STAKE);
+  await onboardAsAtlas(atlas2, ATLAS2_STAKE);
 
   const feeForUpload = await getFeeForUpload(storagePeriods);
   gasUsed  = getGasUsed(await registerBundle(hermes, bundleId, storagePeriods, feeForUpload));
@@ -64,7 +70,7 @@ const runGasBenchmark = async () => {
   console.log(`               Start user challenge: ${gasUsed}`);
 
   const userChallengeId = await lastChallengeId();
-  gasUsed  = getGasUsed(await resolveChallenge(userChallengeId, atlasQuickResolver));
+  gasUsed  = getGasUsed(await resolveChallenge(userChallengeId, atlas2));
   console.log(`Successfully resolve user challenge: ${gasUsed}`);
 
   try {
@@ -79,7 +85,7 @@ const runGasBenchmark = async () => {
 
 const setupEnvironment = async () => {
   web3 = await createWeb3();
-  [from, hermes, perseus, atlasInitialShelterer, atlasQuickResolver, atlasSlowResolver] = await web3.eth.getAccounts();
+  [from, hermes, perseus, atlasInitialShelterer, atlasQuickResolver, atlasSlowResolver, atlas1, atlas2] = await web3.eth.getAccounts();
   ({challenges, time, kycWhitelist, roles, fees, uploads} = await deploy({
     web3,
     contracts: {
@@ -99,20 +105,23 @@ const setupEnvironment = async () => {
       payoutsStore: true,
       rolesStore: true,
       shelteringTransfersStore: true,
-      challengesStore: true
+      challengesStore: true,
+      shelteringQueuesStore: true
     }}));
   await setTimestamp(now);
-  await kycWhitelist.methods.add(atlasInitialShelterer, ATLAS, ATLAS1_STAKE).send({from});
-  await kycWhitelist.methods.add(atlasQuickResolver, ATLAS, ATLAS1_STAKE).send({from});
-  await kycWhitelist.methods.add(atlasSlowResolver, ATLAS, ATLAS1_STAKE).send({from});
+  await kycWhitelist.methods.add(atlasInitialShelterer, ATLAS, ATLAS3_STAKE).send({from});
+  await kycWhitelist.methods.add(atlasQuickResolver, ATLAS, ATLAS3_STAKE).send({from});
+  await kycWhitelist.methods.add(atlasSlowResolver, ATLAS, ATLAS3_STAKE).send({from});
+  await kycWhitelist.methods.add(atlas1, ATLAS, ATLAS1_STAKE).send({from});
+  await kycWhitelist.methods.add(atlas2, ATLAS, ATLAS2_STAKE).send({from});
   await kycWhitelist.methods.add(hermes, HERMES, 0).send({from});
 };
 
 const setTimestamp = async (timestamp) => time.methods.setCurrentTimestamp(timestamp).send({from});
 
-const onboardAsAtlas = async (address) => {
+const onboardAsAtlas = async (address, stake=ATLAS3_STAKE) => {
   const url = `${address}@atlasUrl.com`;
-  return await roles.methods.onboardAsAtlas(url).send({from: address, value: ATLAS1_STAKE});
+  return await roles.methods.onboardAsAtlas(url).send({from: address, value: stake});
 };
 
 const onboardAsHermes = async (address) => {
