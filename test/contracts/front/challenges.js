@@ -168,8 +168,8 @@ describe('Challenges Contract', () => {
       await startChallengeForSystem(uploader, bundleId, SYSTEM_CHALLENGES_COUNT, context, systemChallengeFee);
       expect(await nextChallengeSequenceNumber()).to.equal((SYSTEM_CHALLENGES_COUNT + 1).toString());
       await storeBundle(otherBundleId, uploader, storagePeriods, now);
-      await startChallengeForSystem(uploader, otherBundleId, 100, context, userChallengeFee.mul(new BN('100')));
-      expect(await nextChallengeSequenceNumber()).to.equal((SYSTEM_CHALLENGES_COUNT + 101).toString());
+      await startChallengeForSystem(uploader, otherBundleId, 50, context, userChallengeFee.mul(new BN('50')));
+      expect(await nextChallengeSequenceNumber()).to.equal((SYSTEM_CHALLENGES_COUNT + 51).toString());
     });
 
     it('Sets challenge sequence number to nextChallengeSequenceNumber', async () => {
@@ -177,7 +177,7 @@ describe('Challenges Contract', () => {
       expect(await getChallengeSequenceNumber(systemChallengeId)).to.equal('1');
 
       await storeBundle(otherBundleId, uploader, storagePeriods, now);
-      await startChallengeForSystem(uploader, otherBundleId, 100, context, userChallengeFee.mul(new BN('100')));
+      await startChallengeForSystem(uploader, otherBundleId, 50, context, userChallengeFee.mul(new BN('50')));
       const otherChallengeId = await getChallengeId(uploader, otherBundleId);
       expect(await getChallengeSequenceNumber(otherChallengeId)).to.equal((SYSTEM_CHALLENGES_COUNT + 1).toString());
     });
@@ -387,9 +387,8 @@ describe('Challenges Contract', () => {
     };
 
     beforeEach(async () => {
-      await atlasOnboarding(resolver, ATLAS3_STAKE);
-      await atlasOnboarding(shelterer, ATLAS1_STAKE);
-      await atlasOnboarding(atlas1, ATLAS1_STAKE);
+      await atlasOnboarding(resolver, ATLAS1_STAKE);
+      await atlasOnboarding(shelterer, ATLAS3_STAKE);
       await atlasOnboarding(atlas2, ATLAS2_STAKE);
 
       await addShelterer(bundleId, shelterer, totalReward);
@@ -454,7 +453,7 @@ describe('Challenges Contract', () => {
     });
 
     it('Increases sequence number for all resolutions but last', async () => {
-      await atlasOnboarding(totalStranger, ATLAS3_STAKE);
+      await atlasOnboarding(totalStranger, ATLAS1_STAKE);
       const systemFee = userChallengeFee.mul(new BN('2'));
       await startChallengeForSystem(uploader, bundleId, 2, context, systemFee);
       challengeId = await lastChallengeId();
@@ -582,7 +581,7 @@ describe('Challenges Contract', () => {
     });
 
     it(`Returns fee to creator (part of the fee if partially resolved)`, async () => {
-      await resolveChallenge(systemChallengeId, atlas3);
+      await resolveChallenge(systemChallengeId, atlas1);
 
       await setTimestamp(now + challengeTimeout + 1);
       expect((await observeBalanceChange(web3, uploader, () => markChallengeAsExpired(systemChallengeId, totalStranger))).toString())

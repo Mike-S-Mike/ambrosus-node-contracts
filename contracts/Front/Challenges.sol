@@ -129,7 +129,7 @@ contract Challenges is Base {
             (time.currentTimestamp() > reserveExpiration && 
             challengesStore.isNodeTypeAvailable(atlasStakeStore.getNodeType(resolverId), challengeId));
         
-        return challengeIsInProgress(challengeId) && 
+        return challengeIsInProgress(challengeId) &&
             !sheltering.isSheltering(bundleId, resolverId) &&
             isDesignated &&
             atlasStakeStore.getStake(resolverId) > 0;

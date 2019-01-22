@@ -50,6 +50,8 @@ contract ChallengesStore is Base {
 
     function() public payable {}
 
+    event ChallengeShelterers(bytes32 challengeId, address[] shelterers);
+
     function store(
         address sheltererId,
         bytes32 bundleId,
@@ -69,14 +71,19 @@ contract ChallengesStore is Base {
             activeCount,
             nextChallengeSequenceNumber,
             creationTime + config.SHELTERING_RESERVATION_TIME());
+        
+        address[] memory shelterers = new address[](activeCount);
 
         for (uint8 i = 0; i < activeCount; i++) {
             Consts.SecondaryNodeType nodeType = getChallengeNodeType(nextChallengeSequenceNumber);
             address designatedShelterer = storeQueues.rotateRound(nodeType);
+            
             challenges[challengeId].designatedShelterers[designatedShelterer] = true;
             incrementNextChallengeSequenceNumber(1);
+            shelterers[i] = designatedShelterer;
         }
 
+        emit ChallengeShelterers(challengeId, shelterers);
         activeChallengesOnBundleCount[bundleId] = activeChallengesOnBundleCount[bundleId].add(activeCount).castTo32();
         return challengeId;
     }
@@ -130,32 +137,21 @@ contract ChallengesStore is Base {
 
     function isNodeTypeAvailable(Consts.SecondaryNodeType nodeType, bytes32 challengeId) public view onlyContextInternalCalls returns (bool) {
         uint sequenceNumber = challenges[challengeId].sequenceNumber;
-        Consts.SecondaryNodeType currentType = getChallengeNodeType(sequenceNumber);
-        if (currentType == nodeType) {
-            return true;
-        }
-        
-        uint8 activeCount = challenges[challengeId].activeCount;
-        if (nodeType == Consts.SecondaryNodeType.OMEGA) {
-            if (activeCount > 2) {
-                return true;
-            }
-            return getChallengeNodeType(sequenceNumber + activeCount - 1) == Consts.SecondaryNodeType.OMEGA;
-        }
-        uint divisor = config.ATLAS1_SHELTERING_DIVISOR();
-        if (nodeType == Consts.SecondaryNodeType.SIGMA) {
-            divisor = config.ATLAS2_SHELTERING_DIVISOR();
-        }
-        return checkDivisor(divisor, sequenceNumber, activeCount);
-    }
+        uint sequenceEnd = sequenceNumber + challenges[challengeId].activeCount;
 
-    function checkDivisor(uint divisor, uint sequenceNumber, uint8 activeCount) private pure returns (bool) {
-        if (activeCount > divisor) {
-            return true;
+        uint startDistribution = sequenceNumber.mod(config.SHELTERING_DISTRIBUTION_PRECISION());
+        uint endDistribution = sequenceEnd.mod(config.SHELTERING_DISTRIBUTION_PRECISION());
+
+        (uint zetaRate, uint sigmaRate) = getChallengeDistributionRates();
+        
+        if (nodeType == Consts.SecondaryNodeType.ZETA) {
+            return startDistribution < zetaRate || endDistribution < zetaRate;
+        } else if (nodeType == Consts.SecondaryNodeType.SIGMA) {
+            return (startDistribution >= zetaRate && startDistribution < sigmaRate) ||
+                (endDistribution >= zetaRate && endDistribution < sigmaRate);
+        } else {
+            return startDistribution >= sigmaRate || endDistribution >= sigmaRate;
         }
-        uint first = sequenceNumber;
-        uint last = sequenceNumber + activeCount - 1;
-        return first.mod(divisor) > last.mod(divisor);
     }
 
     function incrementNextChallengeSequenceNumber(uint amount) private {
@@ -163,11 +159,26 @@ contract ChallengesStore is Base {
     }
 
     function getChallengeNodeType(uint sequenceNumber) private view returns (Consts.SecondaryNodeType) {
-        if (sequenceNumber.mod(config.ATLAS1_SHELTERING_DIVISOR()) == 0) {
+        (uint zetaRate, uint sigmaRate) = getChallengeDistributionRates();
+        if (sequenceNumber.mod(config.SHELTERING_DISTRIBUTION_PRECISION()) < zetaRate) {
             return Consts.SecondaryNodeType.ZETA;
-        } else if (sequenceNumber.mod(config.ATLAS2_SHELTERING_DIVISOR()) == 0) {
+        } else if (sequenceNumber.mod(config.SHELTERING_DISTRIBUTION_PRECISION()) < sigmaRate) {
             return Consts.SecondaryNodeType.SIGMA;
         }
         return Consts.SecondaryNodeType.OMEGA;
+    }
+
+    function getChallengeDistributionRates() private view returns (uint, uint) {
+        uint nodesZeta = storeQueues.getQueueSize(Consts.SecondaryNodeType.ZETA);
+        uint nodesSigma = storeQueues.getQueueSize(Consts.SecondaryNodeType.SIGMA);
+        uint nodesOmega = storeQueues.getQueueSize(Consts.SecondaryNodeType.OMEGA);
+        uint totalRate = 1 + ((4*nodesSigma + 12*nodesOmega) * config.SHELTERING_DISTRIBUTION_PRECISION() / nodesZeta);
+        uint sigmaRate = (
+            (totalRate - ((12*nodesOmega)/nodesZeta)) * 
+            config.SHELTERING_DISTRIBUTION_PRECISION() * 
+            config.SHELTERING_DISTRIBUTION_PRECISION()
+            ) / totalRate;
+        uint zetaRate = config.SHELTERING_DISTRIBUTION_PRECISION() * config.SHELTERING_DISTRIBUTION_PRECISION() / totalRate;
+        return (zetaRate, sigmaRate);
     }
 }

@@ -96,5 +96,10 @@ contract ShelteringQueuesStore is Base {
         bytes32 queueId = keccak256(abi.encodePacked(nodeType));
         return sheltererQueuesByType[queueId].size == 0;
     }
+
+    function getQueueSize(Consts.SecondaryNodeType nodeType) public view  returns (uint) {
+        bytes32 queueId = keccak256(abi.encodePacked(nodeType));
+        return sheltererQueuesByType[queueId].size;
+    }
 }
 

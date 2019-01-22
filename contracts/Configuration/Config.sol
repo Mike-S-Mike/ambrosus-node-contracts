@@ -29,8 +29,9 @@ contract Config {
     uint constant public ATLAS2_STAKE = 30000 ether;
     uint constant public ATLAS3_STAKE = 75000 ether;
 
-    uint constant public ATLAS1_SHELTERING_DIVISOR = 17;
-    uint constant public ATLAS2_SHELTERING_DIVISOR = 4;
+    uint constant public ATLAS2_SHELTERING_FRACTION = 4; //times the amount of bundles an atlas 1 node is supposed to receive
+    uint constant public ATLAS3_SHELTERING_FRACTION = 3 * ATLAS2_SHELTERING_FRACTION;
+    uint constant public SHELTERING_DISTRIBUTION_PRECISION = 100;
     
     uint32 constant public SHELTERING_RESERVATION_TIME = 1 days;
 
